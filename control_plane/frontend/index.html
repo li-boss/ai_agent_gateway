@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Agent Gateway - 智能NPC调度中台沙盒</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Noto+Sans+SC:wght@300;400;700&display=swap" rel="stylesheet">
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Element Plus CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/element-plus/dist/index.css">
+  <!-- FontAwesome for icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <style>
+    body {
+      font-family: 'Outfit', 'Noto Sans SC', sans-serif;
+      background-color: #0b0f19;
+      color: #f3f4f6;
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(31, 41, 234, 0.15) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+        radial-gradient(at 50% 0%, rgba(6, 182, 212, 0.1) 0px, transparent 50%);
+      height: 100vh;
+      overflow: hidden;
+    }
+    /* Glassmorphism classes */
+    .glass-card {
+      background: rgba(17, 24, 39, 0.7);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    }
+    .glass-input {
+      background: rgba(31, 41, 55, 0.5) !important;
+      border: 1px solid rgba(255, 255, 255, 0.1) !important;
+      color: #f3f4f6 !important;
+    }
+    .glass-input:focus {
+      border-color: #6366f1 !important;
+    }
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(11, 15, 25, 0.5);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(99, 102, 241, 0.3);
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(99, 102, 241, 0.6);
+    }
+    /* Pulse animations */
+    .pulse-green {
+      box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+      animation: pulseGreen 2s infinite;
+    }
+    @keyframes pulseGreen {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+    .pulse-red {
+      box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+      animation: pulseRed 2s infinite;
+    }
+    @keyframes pulseRed {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+      70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+    }
+    .pulse-orange {
+      box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7);
+      animation: pulseOrange 2s infinite;
+    }
+    @keyframes pulseOrange {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7); }
+      70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(245, 158, 11, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+    }
+    /* Chat bubbles */
+    .bubble-user {
+      background: linear-gradient(135deg, #1e40af, #2563eb);
+      border-top-left-radius: 2px;
+      box-shadow: 0 4px 15px rgba(37, 99, 235, 0.2);
+    }
+    .bubble-npc {
+      background: rgba(31, 41, 55, 0.85);
+      border-top-right-radius: 2px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    }
+    .bubble-pending {
+      background: rgba(55, 65, 81, 0.5);
+      border: 1px dashed rgba(255, 255, 255, 0.2);
+      animation: pulseBorder 1.5s infinite alternate;
+    }
+    @keyframes pulseBorder {
+      0% { border-color: rgba(99, 102, 241, 0.3); }
+      100% { border-color: rgba(6, 182, 212, 0.8); }
+    }
+    /* Typing indicator dot animation */
+    .dot {
+      animation: wave 1.2s infinite;
+    }
+    .dot:nth-child(2) { animation-delay: 0.2s; }
+    .dot:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes wave {
+      0%, 60%, 100% { transform: translateY(0); }
+      30% { transform: translateY(-4px); }
+    }
+    /* Custom Element Plus styles override for dark theme */
+    .el-select {
+      --el-select-border-color-hover: #6366f1;
+      --el-select-input-focus-border-color: #6366f1;
+    }
+    .el-select__wrapper {
+      background-color: rgba(17, 24, 39, 0.8) !important;
+      box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1) inset !important;
+    }
+    .el-select__wrapper:hover {
+      box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.8) inset !important;
+    }
+    .el-select__wrapper.is-focus {
+      box-shadow: 0 0 0 1px rgba(99, 102, 241, 1) inset !important;
+    }
+    .el-select__placeholder {
+      color: #9ca3af !important;
+    }
+    .el-select__selected-item {
+      color: #f3f4f6 !important;
+    }
+    .el-dialog {
+      background: rgba(17, 24, 39, 0.95) !important;
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+    }
+    .el-dialog__title {
+      color: #f3f4f6 !important;
+    }
+    .el-form-item__label {
+      color: #9ca3af !important;
+    }
+    .el-input__inner, .el-textarea__inner {
+      color: #f3f4f6 !important;
+      background-color: rgba(31, 41, 55, 0.6) !important;
+      border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    }
+    .el-input__inner:focus, .el-textarea__inner:focus {
+      border-color: #6366f1 !important;
+    }
+  </style>
+</head>
+<body class="flex flex-col">
+
+  <div id="app" class="flex flex-col h-full w-full max-w-7xl mx-auto p-4 md:p-6" v-cloak>
+    
+    <!-- Header Area -->
+    <header class="glass-card rounded-2xl p-4 mb-4 flex flex-col md:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="bg-indigo-600/35 p-3 rounded-xl border border-indigo-500/20">
+          <i class="fa-solid fa-network-wired text-2xl text-indigo-400"></i>
+        </div>
+        <div>
+          <h1 class="text-xl font-bold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 via-cyan-200 to-indigo-100">
+            AI Agent Gateway
+          </h1>
+          <p class="text-xs text-gray-400">智能 NPC 行为配置与调度中台 (v2.1)</p>
+        </div>
+      </div>
+      
+      <!-- Status Badges -->
+      <div class="flex flex-wrap items-center gap-4 text-sm">
+        <!-- C++ Engine Status -->
+        <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-900/50 border border-gray-800">
+          <span class="text-xs text-gray-400">C++ 引擎节点:</span>
+          <span :class="engineOnline ? 'text-emerald-400' : 'text-rose-400'" class="font-semibold flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full inline-block" :class="engineOnline ? 'bg-emerald-400 pulse-green' : 'bg-rose-400 pulse-red'"></span>
+            {{ engineOnline ? '在线' : '离线' }}
+          </span>
+        </div>
+        
+        <!-- WebSocket Status -->
+        <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-900/50 border border-gray-800">
+          <span class="text-xs text-gray-400">WebSocket 状态:</span>
+          <span :class="wsConnected ? 'text-emerald-400' : 'text-amber-400'" class="font-semibold flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full inline-block" :class="wsConnected ? 'bg-emerald-400 pulse-green' : 'bg-amber-400'"></span>
+            {{ wsConnected ? '已连接' : '已断开' }}
+          </span>
+        </div>
+
+        <button @click="showAddNpcDialog = true" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white rounded-lg transition text-xs font-semibold flex items-center gap-1.5 shadow-md">
+          <i class="fa-solid fa-user-plus"></i> 新建 NPC 档案
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <div class="flex-1 grid grid-cols-1 lg:grid-cols-4 gap-4 overflow-hidden mb-4">
+      
+      <!-- Left Sidebar: NPC Profile and Details -->
+      <div class="lg:col-span-1 flex flex-col gap-4 overflow-y-auto">
+        <!-- NPC Select Card -->
+        <div class="glass-card rounded-2xl p-4 flex flex-col gap-3 shrink-0">
+          <h2 class="text-xs font-semibold text-indigo-300 tracking-wider uppercase flex items-center gap-2">
+            <i class="fa-solid fa-users"></i> 选择 NPC 角色
+          </h2>
+          <div>
+            <el-select v-model="selectedNpcId" placeholder="请选择对话NPC" class="w-full" size="default" @change="onNpcChange">
+              <el-option
+                v-for="npc in npcs"
+                :key="npc.id"
+                :label="npc.name"
+                :value="npc.id"
+              />
+            </el-select>
+          </div>
+
+          <div v-if="currentNpc" class="flex flex-col gap-2.5 text-xs">
+            <div>
+              <span class="text-gray-400 block mb-1">人格标签 (Tags)</span>
+              <div class="flex flex-wrap gap-1">
+                <span v-for="tag in currentNpcTags" :key="tag" class="px-2 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/25 text-indigo-300 text-[10px]">
+                  {{ tag }}
+                </span>
+              </div>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-gray-400">每分钟流限额:</span>
+              <span class="font-mono text-cyan-400 bg-cyan-950/45 px-2 py-0.5 rounded border border-cyan-800/40 text-[10px]">
+                {{ currentNpc.max_tokens_per_min || 200 }} 字符
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Telemetry: C++ Engine Load (US 1.2) -->
+        <div class="glass-card rounded-2xl p-4 flex flex-col gap-3 shrink-0">
+          <h2 class="text-xs font-semibold text-indigo-300 tracking-wider uppercase flex items-center gap-2">
+            <i class="fa-solid fa-chart-line"></i> C++ 引擎实时负载 (US 1.2)
+          </h2>
+          <div class="flex flex-col gap-2 text-xs" v-if="engineOnline && telemetry">
+            <div class="flex justify-between items-center">
+              <span class="text-gray-400">活跃任务线程数:</span>
+              <span class="font-mono font-bold" :class="telemetry.active_threads > 0 ? 'text-amber-400' : 'text-gray-400'">
+                {{ telemetry.active_threads }} / {{ telemetry.total_threads }}
+              </span>
+            </div>
+            <!-- Progress Bar -->
+            <div class="w-full bg-gray-900 rounded-full h-1.5 overflow-hidden">
+              <div 
+                class="bg-indigo-500 h-1.5 rounded-full transition-all duration-500"
+                :style="{ width: `${(telemetry.active_threads / (telemetry.total_threads || 1)) * 100}%` }"
+              ></div>
+            </div>
+            <div class="flex justify-between items-center mt-1">
+              <span class="text-gray-400">等待任务队列:</span>
+              <span class="font-mono font-bold" :class="telemetry.queue_size > 0 ? 'text-rose-400 pulse-red px-1 rounded' : 'text-emerald-400'">
+                {{ telemetry.queue_size }} 个
+              </span>
+            </div>
+          </div>
+          <div class="text-xs text-gray-500 italic py-1 text-center" v-else>
+            {{ engineOnline ? '加载监控数据中...' : '引擎离线，无指标反馈' }}
+          </div>
+        </div>
+
+        <!-- NPC System Prompt & History versions (US 2.3) -->
+        <div class="glass-card rounded-2xl p-4 flex-1 flex flex-col gap-3 min-h-[200px]">
+          <div class="flex items-center justify-between">
+            <h2 class="text-xs font-semibold text-indigo-300 tracking-wider uppercase flex items-center gap-2">
+              <i class="fa-solid fa-brain"></i> 系统人设及版本回滚
+            </h2>
+            <button @click="showImportDialog = true" class="text-[10px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-1.5 py-0.5 rounded hover:bg-indigo-500/35 transition">
+              背景导入
+            </button>
+          </div>
+          
+          <!-- Version rollback dropdown (US 2.3) -->
+          <div v-if="currentNpc" class="flex gap-2 items-center">
+            <span class="text-[10px] text-gray-400 shrink-0">人设版本:</span>
+            <el-select v-model="selectedVersion" placeholder="历史版本" size="small" class="flex-1" @change="rollbackVersion">
+              <el-option
+                v-for="ver in npcVersions"
+                :key="ver.version"
+                :label="`v${ver.version} (${formatDate(ver.created_at)})`"
+                :value="ver.version"
+              />
+            </el-select>
+          </div>
+
+          <div class="flex-1 bg-gray-900/40 border border-gray-800 rounded-xl p-3 text-xs text-gray-300 overflow-y-auto font-mono whitespace-pre-wrap leading-relaxed">
+            {{ currentNpc ? currentNpc.system_prompt : '暂无配置，请选择 NPC' }}
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Panel: Chat Interface -->
+      <div class="lg:col-span-3 glass-card rounded-2xl flex flex-col overflow-hidden relative">
+        <!-- Chat Header -->
+        <div class="px-6 py-4 border-b border-white/5 bg-gray-900/30 flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-500 to-cyan-400 flex items-center justify-center font-bold text-white text-lg shadow-inner">
+              {{ currentNpc ? currentNpc.name.charAt(0) : '?' }}
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <h3 class="font-semibold text-gray-200">{{ currentNpc ? currentNpc.name : '未选择 NPC' }}</h3>
+                
+                <!-- State machine indicator badge (US 3.2) -->
+                <span 
+                  v-if="currentNpc"
+                  class="px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide transition-colors"
+                  :class="activeNpcState === 'Combat' ? 'bg-rose-950/80 border border-rose-800 text-rose-400 pulse-red' : 'bg-emerald-950/80 border border-emerald-800 text-emerald-400'"
+                >
+                  {{ activeNpcState === 'Combat' ? '战斗状态 (Combat)' : '常规状态 (Normal)' }}
+                </span>
+              </div>
+              <p class="text-xs text-gray-500 mt-0.5" v-if="currentNpc">已载入 NPC 档案，支持攻击性关键字触发状态转换</p>
+            </div>
+          </div>
+          
+          <div class="flex items-center gap-3">
+            <!-- Export dialogue logs button (US 4.3) -->
+            <button @click="exportLogs" class="text-xs text-gray-400 hover:text-indigo-400 transition flex items-center gap-1">
+              <i class="fa-solid fa-file-export"></i> 导出日志
+            </button>
+            <div class="w-px h-3 bg-gray-800"></div>
+            <button @click="clearChat" class="text-xs text-gray-400 hover:text-rose-400 transition flex items-center gap-1">
+              <i class="fa-solid fa-trash-can"></i> 清空对话
+            </button>
+          </div>
+        </div>
+
+        <!-- Chat Area -->
+        <div ref="chatContainer" class="flex-1 p-6 overflow-y-auto flex flex-col gap-4">
+          <div v-if="messages.length === 0" class="flex flex-col items-center justify-center h-full text-center p-8">
+            <i class="fa-solid fa-comments text-5xl text-gray-700 mb-3"></i>
+            <p class="text-gray-500 text-sm">与该 NPC 的历史记忆为空</p>
+            <p class="text-gray-600 text-xs mt-1">输入第一条消息以触发 C++ 底层引擎调度</p>
+            <div class="flex gap-2 mt-4 text-[10px]">
+              <span class="px-2 py-1 rounded bg-gray-900 border border-gray-800 text-gray-400 cursor-pointer hover:border-gray-600 transition" @click="fillQuickMsg('你好')">短路拦截测试 ("你好")</span>
+              <span class="px-2 py-1 rounded bg-gray-900 border border-gray-800 text-gray-400 cursor-pointer hover:border-rose-600/50 text-rose-300 transition" @click="fillQuickMsg('拔剑！我要攻击你！')">状态机切换 ("拔剑！攻击")</span>
+            </div>
+          </div>
+
+          <div 
+            v-for="(msg, index) in messages" 
+            :key="index"
+            class="flex w-full"
+            :class="msg.role === 'user' ? 'justify-start' : 'justify-end'"
+          >
+            <!-- User Message: LEFT aligned, blue bubble -->
+            <div v-if="msg.role === 'user'" class="flex items-start gap-2.5 max-w-[75%]">
+              <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-xs font-bold shrink-0">U</div>
+              <div class="bubble-user rounded-2xl px-4 py-2.5 text-sm text-white leading-relaxed">
+                {{ msg.content }}
+              </div>
+            </div>
+
+            <!-- NPC Message: RIGHT aligned, grey bubble -->
+            <div v-else class="flex items-start gap-2.5 max-w-[75%] flex-row-reverse">
+              <div class="w-8 h-8 rounded-full bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-xs font-bold text-indigo-300 shrink-0">
+                {{ currentNpc ? currentNpc.name.charAt(0) : 'A' }}
+              </div>
+              <div>
+                <div class="bubble-npc rounded-2xl px-4 py-2.5 text-sm text-gray-200 leading-relaxed relative" :class="msg.status === 'Failed' ? 'border-rose-600/40 text-rose-300 bg-rose-950/20' : ''">
+                  <span v-if="msg.isShortCircuited" class="absolute -top-2 -left-2 bg-amber-500 text-gray-950 font-bold text-[8px] px-1 rounded-sm scale-90">
+                    本地拦截 (短路)
+                  </span>
+                  {{ msg.content }}
+                </div>
+                <!-- Latency or metadata info if available -->
+                <span v-if="msg.latency" class="text-[10px] text-gray-500 block text-right mt-1 px-1">
+                  耗时: {{ (msg.latency / 1000).toFixed(2) }}s
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Pending placeholder (Typing Indicator + Cancel Button) (US 1.3) -->
+          <div v-if="pendingTask" class="flex w-full justify-end">
+            <div class="flex items-start gap-2.5 max-w-[75%] flex-row-reverse">
+              <div class="w-8 h-8 rounded-full bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-xs font-bold text-indigo-300 shrink-0 animate-pulse">
+                {{ currentNpc ? currentNpc.name.charAt(0) : 'A' }}
+              </div>
+              <div class="flex flex-col items-end gap-1.5">
+                <div class="bubble-pending rounded-2xl px-5 py-3 text-sm text-gray-400 flex items-center gap-1.5">
+                  <span class="text-xs text-gray-400 mr-1">C++ 引擎调度中</span>
+                  <span class="dot w-1.5 h-1.5 bg-indigo-400 rounded-full inline-block"></span>
+                  <span class="dot w-1.5 h-1.5 bg-indigo-400 rounded-full inline-block"></span>
+                  <span class="dot w-1.5 h-1.5 bg-indigo-400 rounded-full inline-block"></span>
+                </div>
+                <!-- Cancel task button (US 1.3) -->
+                <button 
+                  @click="cancelCurrentTask" 
+                  class="text-[10px] text-rose-400 bg-rose-950/50 hover:bg-rose-900 border border-rose-800/40 px-2 py-0.5 rounded transition shadow-sm flex items-center gap-1"
+                >
+                  <i class="fa-solid fa-circle-stop"></i> 强制中断任务
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chat Input Area -->
+        <div class="p-4 bg-gray-900/40 border-t border-white/5 flex gap-3 items-center">
+          <input 
+            v-model="inputMessage" 
+            type="text" 
+            placeholder="向 NPC 发送指令... (输入“攻击”或“决斗”等词可触发战斗状态)" 
+            class="flex-1 bg-gray-800/80 border border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-indigo-500 transition placeholder-gray-500 text-gray-200"
+            @keyup.enter="sendMessage"
+            :disabled="!currentNpc || pendingTask || !engineOnline"
+          >
+          <button 
+            @click="sendMessage" 
+            class="px-5 py-3 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 active:scale-95 text-white font-semibold text-sm rounded-xl transition flex items-center gap-2 shadow-lg disabled:opacity-50 disabled:pointer-events-none"
+            :disabled="!inputMessage.trim() || !currentNpc || pendingTask || !engineOnline"
+          >
+            <span>发送</span>
+            <i class="fa-solid fa-paper-plane text-xs"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dialog: Add New NPC -->
+    <el-dialog
+      v-model="showAddNpcDialog"
+      title="配置新 NPC 档案"
+      width="550px"
+      align-center
+    >
+      <el-form :model="newNpc" label-position="top">
+        <el-form-item label="NPC 角色名称" required>
+          <el-input v-model="newNpc.name" placeholder="请输入 NPC 名称，例如：莫格莱尼" />
+        </el-form-item>
+        <el-form-item label="系统设定 (System Prompt / 人设)" required>
+          <el-input 
+            v-model="newNpc.system_prompt" 
+            type="textarea" 
+            :rows="4" 
+            placeholder="在此处输入详细的人设要求，底层引擎会在大模型交互时作为强规则注入..."
+          />
+        </el-form-item>
+        <el-form-item label="性格特征标签 (逗号分隔)">
+          <el-input v-model="newNpc.personality_tags" placeholder="例如：骄傲, 战斗, 战士" />
+        </el-form-item>
+        <el-form-item label="分钟级 Token 限额">
+          <el-input v-model.number="newNpc.max_tokens_per_min" type="number" placeholder="200" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <div class="flex justify-end gap-3">
+          <el-button @click="showAddNpcDialog = false" class="!bg-gray-800 !text-gray-300 !border-gray-700 hover:!bg-gray-700">取消</el-button>
+          <el-button type="primary" @click="saveNpc" class="!bg-indigo-600 hover:!bg-indigo-500 !border-indigo-600">保存档案</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <!-- Dialog: Import Background Story (US 2.2) -->
+    <el-dialog
+      v-model="showImportDialog"
+      title="背景故事结构化导入 (US 2.2)"
+      width="500px"
+      align-center
+    >
+      <el-form label-position="top">
+        <el-form-item label="以 JSON 格式粘贴 NPC 背景设定或故事" required>
+          <el-input 
+            v-model="importJsonText" 
+            type="textarea" 
+            :rows="6" 
+            placeholder='{ "background": "这里填写该 NPC 的长篇背景故事或知识库设定..." }'
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <div class="flex justify-end gap-3">
+          <el-button @click="showImportDialog = false" class="!bg-gray-800 !text-gray-300 !border-gray-700 hover:!bg-gray-700">取消</el-button>
+          <el-button type="primary" @click="importBackground" class="!bg-indigo-600 hover:!bg-indigo-500 !border-indigo-600">确认导入</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+  </div>
+
+  <!-- Vue 3 + Element Plus via CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/vue@3.3.4/dist/vue.global.prod.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/element-plus"></script>
+  <!-- Axios -->
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+
+  <script>
+    const { createApp, ref, computed, onMounted, nextTick } = Vue;
+
+    createApp({
+      setup() {
+        const npcs = ref([]);
+        const selectedNpcId = ref(null);
+        const messages = ref([]);
+        const inputMessage = ref('');
+        const pendingTask = ref(false);
+        const currentTaskId = ref(null);
+        const engineOnline = ref(false);
+        const wsConnected = ref(false);
+        const showAddNpcDialog = ref(false);
+        const showImportDialog = ref(false);
+        const importJsonText = ref('{\n  "background": "曾在大裂变战役中击退过亡灵天灾，发誓效忠于白银之手骑士团。"\n}');
+        const chatContainer = ref(null);
+
+        // Load & Telemetry states (US 1.2)
+        const telemetry = ref(null);
+
+        // NPC State Machine state (US 3.2)
+        const activeNpcState = ref('Normal');
+
+        // NPC Version control states (US 2.3)
+        const npcVersions = ref([]);
+        const selectedVersion = ref(null);
+
+        const newNpc = ref({
+          name: '',
+          system_prompt: '',
+          personality_tags: '',
+          max_tokens_per_min: 200
+        });
+
+        const currentNpc = computed(() => {
+          return npcs.value.find(npc => npc.id === selectedNpcId.value) || null;
+        });
+
+        const currentNpcTags = computed(() => {
+          if (!currentNpc.value || !currentNpc.value.personality_tags) return [];
+          return currentNpc.value.personality_tags.split(',').map(t => t.trim()).filter(Boolean);
+        });
+
+        // Format Date
+        const formatDate = (isoStr) => {
+          if (!isoStr) return '';
+          const d = new Date(isoStr);
+          return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+        };
+
+        // Fetch NPC list
+        const fetchNpcs = async () => {
+          try {
+            const response = await axios.get('/api/npcs');
+            npcs.value = response.data;
+            if (npcs.value.length > 0 && !selectedNpcId.value) {
+              selectedNpcId.value = npcs.value[0].id;
+              onNpcChange();
+            }
+          } catch (error) {
+            console.error('获取 NPC 列表失败:', error);
+            ElementPlus.ElMessage.error('获取 NPC 列表失败，请检查后端服务');
+          }
+        };
+
+        // Fetch NPC Version history (US 2.3)
+        const fetchNpcVersions = async () => {
+          if (!selectedNpcId.value) return;
+          try {
+            const response = await axios.get(`/api/npcs/${selectedNpcId.value}/versions`);
+            npcVersions.value = response.data;
+            if (npcVersions.value.length > 0) {
+              selectedVersion.value = npcVersions.value[0].version;
+            }
+          } catch (error) {
+            console.error('获取 NPC 版本历史失败:', error);
+          }
+        };
+
+        // Check C++ Engine online status and fetch telemetry (US 1.1 & 1.2)
+        const fetchEngineLoad = async () => {
+          try {
+            const response = await axios.get('/api/engine/status');
+            engineOnline.value = response.data.online;
+
+            if (engineOnline.value) {
+              const telemetryRes = await axios.get('/api/engine/load');
+              telemetry.value = telemetryRes.data;
+            } else {
+              telemetry.value = null;
+            }
+          } catch (error) {
+            engineOnline.value = false;
+            telemetry.value = null;
+          }
+        };
+
+        // Handle NPC change
+        const onNpcChange = () => {
+          messages.value = [];
+          pendingTask.value = false;
+          currentTaskId.value = null;
+          activeNpcState.value = 'Normal';
+          fetchNpcVersions();
+        };
+
+        // Fill quick test message
+        const fillQuickMsg = (txt) => {
+          inputMessage.value = txt;
+        };
+
+        // Clear Chat
+        const clearChat = () => {
+          messages.value = [];
+          pendingTask.value = false;
+          currentTaskId.value = null;
+        };
+
+        // Scroll chat area to bottom
+        const scrollToBottom = async () => {
+          await nextTick();
+          if (chatContainer.value) {
+            chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
+          }
+        };
+
+        // Export Logs (US 4.3)
+        const exportLogs = () => {
+          window.open('/api/tasks/export', '_blank');
+          ElementPlus.ElMessage.success('交互日志已导出并下载');
+        };
+
+        // Cooperative Cancel Task (US 1.3)
+        const cancelCurrentTask = async () => {
+          if (!currentTaskId.value) return;
+          try {
+            await axios.post(`/api/tasks/${currentTaskId.value}/cancel`);
+            ElementPlus.ElMessage.warning('强制中断指令已下发至 C++ 调度队列');
+            pendingTask.value = false;
+            currentTaskId.value = null;
+          } catch (error) {
+            console.error('任务取消失败:', error);
+            ElementPlus.ElMessage.error('任务取消指令发送失败');
+          }
+        };
+
+        // Import Background story (US 2.2)
+        const importBackground = async () => {
+          try {
+            const json = JSON.parse(importJsonText.value);
+            if (!json.background) {
+              ElementPlus.ElMessage.warning('JSON 结构必须含有 "background" 字段。');
+              return;
+            }
+
+            const response = await axios.post(`/api/npcs/${selectedNpcId.value}/import`, {
+              background: json.background
+            });
+            ElementPlus.ElMessage.success('人设背景故事成功导入，版本已升迁');
+            showImportDialog.value = false;
+            
+            // Reload NPC profile & versions
+            await fetchNpcs();
+            await fetchNpcVersions();
+          } catch (error) {
+            console.error('导入背景失败:', error);
+            ElementPlus.ElMessage.error(error.message.includes('JSON') ? 'JSON 格式解析错误' : '导入失败，请检查输入');
+          }
+        };
+
+        // Rollback NPC Version (US 2.3)
+        const rollbackVersion = async (ver) => {
+          if (!ver) return;
+          try {
+            const response = await axios.post(`/api/npcs/${selectedNpcId.value}/rollback`, {
+              version: ver
+            });
+            ElementPlus.ElMessage.success(`人设已回滚至版本 v${ver}`);
+            
+            // Reload NPC profile
+            await fetchNpcs();
+            await fetchNpcVersions();
+          } catch (error) {
+            console.error('人设回滚失败:', error);
+            ElementPlus.ElMessage.error('回滚版本失败');
+          }
+        };
+
+        // Poll task result (Fallback mechanism)
+        const pollTaskResult = (taskId, startTime) => {
+          let attempts = 0;
+          const maxAttempts = 30; // 30 seconds
+          
+          const interval = setInterval(async () => {
+            if (!pendingTask.value || currentTaskId.value !== taskId) {
+              clearInterval(interval);
+              return;
+            }
+            
+            attempts++;
+            if (attempts > maxAttempts) {
+              clearInterval(interval);
+              pendingTask.value = false;
+              currentTaskId.value = null;
+              ElementPlus.ElMessage.error('C++ 引擎执行超时');
+              return;
+            }
+
+            try {
+              const response = await axios.get(`/api/tasks/${taskId}`);
+              const task = response.data;
+              
+              if (task.status === 'Done') {
+                clearInterval(interval);
+                pendingTask.value = false;
+                currentTaskId.value = null;
+                
+                // Add NPC response if not already pushed by WebSocket
+                const existing = messages.value.find(m => m.taskId === taskId);
+                if (!existing) {
+                  messages.value.push({
+                    role: 'npc',
+                    content: task.result,
+                    taskId: taskId,
+                    latency: Date.now() - startTime
+                  });
+                  scrollToBottom();
+                }
+              } else if (task.status === 'Failed') {
+                clearInterval(interval);
+                pendingTask.value = false;
+                currentTaskId.value = null;
+                
+                const existing = messages.value.find(m => m.taskId === taskId);
+                if (!existing) {
+                  messages.value.push({
+                    role: 'npc',
+                    content: task.result || '任务执行已失败',
+                    taskId: taskId,
+                    status: 'Failed'
+                  });
+                  scrollToBottom();
+                }
+              }
+            } catch (error) {
+              console.error('轮询任务状态失败:', error);
+            }
+          }, 1000);
+        };
+
+        // Send Message
+        const sendMessage = async () => {
+          if (!inputMessage.value.trim() || !selectedNpcId.value || pendingTask.value) return;
+
+          const prompt = inputMessage.value.trim();
+          inputMessage.value = '';
+
+          // Add user message to chat
+          messages.value.push({
+            role: 'user',
+            content: prompt
+          });
+          scrollToBottom();
+
+          pendingTask.value = true;
+          const startTime = Date.now();
+
+          try {
+            const response = await axios.post('/api/task', {
+              npc_id: selectedNpcId.value,
+              prompt: prompt,
+              user_id: 1 // default user ID
+            });
+
+            const taskId = response.data.taskId;
+            currentTaskId.value = taskId;
+
+            // Instantly transition local state indicator based on response state machine prediction
+            if (response.data.state) {
+              activeNpcState.value = response.data.state;
+            }
+            
+            // Set up fallback polling in 3 seconds
+            setTimeout(() => {
+              pollTaskResult(taskId, startTime);
+            }, 3000);
+
+          } catch (error) {
+            console.error('发送对话任务失败:', error);
+            pendingTask.value = false;
+            currentTaskId.value = null;
+            
+            const errorMsg = error.response?.data?.error || '请求发送失败，请确保 C++ 引擎与 Node.js 连接畅通';
+            
+            // Add error notification directly into chat
+            messages.value.push({
+              role: 'npc',
+              content: `调度异常: ${errorMsg}`,
+              status: 'Failed'
+            });
+            scrollToBottom();
+          }
+        };
+
+        // Save new NPC
+        const saveNpc = async () => {
+          if (!newNpc.value.name || !newNpc.value.system_prompt) {
+            ElementPlus.ElMessage.warning('名称和人设系统提示词不能为空');
+            return;
+          }
+
+          try {
+            const response = await axios.post('/api/npcs', newNpc.value);
+            ElementPlus.ElMessage.success('NPC 档案保存成功');
+            showAddNpcDialog.value = false;
+            
+            // Reset form
+            newNpc.value = {
+              name: '',
+              system_prompt: '',
+              personality_tags: '',
+              max_tokens_per_min: 200
+            };
+            
+            // Reload and select the new NPC
+            await fetchNpcs();
+            selectedNpcId.value = response.data.id;
+            onNpcChange();
+          } catch (error) {
+            console.error('新增 NPC 失败:', error);
+            ElementPlus.ElMessage.error('保存失败，请检查后端输入');
+          }
+        };
+
+        // Establish WebSocket Connection
+        const initWebSocket = () => {
+          const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+          const wsUrl = `${protocol}//${window.location.host}`;
+          
+          let ws = new WebSocket(wsUrl);
+
+          ws.onopen = () => {
+            console.log('WebSocket connection established.');
+            wsConnected.value = true;
+          };
+
+          ws.onmessage = (event) => {
+            try {
+              const data = JSON.parse(event.data);
+              
+              if (data.type === 'task_update') {
+                if (data.state) {
+                  activeNpcState.value = data.state;
+                }
+
+                if (currentTaskId.value === data.taskId) {
+                  pendingTask.value = false;
+                  currentTaskId.value = null;
+
+                  // Add response
+                  const existing = messages.value.find(m => m.taskId === data.taskId);
+                  if (!existing) {
+                    messages.value.push({
+                      role: 'npc',
+                      content: data.result,
+                      taskId: data.taskId,
+                      isShortCircuited: data.isShortCircuited,
+                      status: data.status
+                    });
+                    scrollToBottom();
+                  }
+                }
+              }
+            } catch (err) {
+              console.error('处理 WebSocket 消息出错:', err);
+            }
+          };
+
+          ws.onclose = () => {
+            console.log('WebSocket connection closed. Reconnecting in 5s...');
+            wsConnected.value = false;
+            setTimeout(initWebSocket, 5000);
+          };
+
+          ws.onerror = (err) => {
+            console.error('WebSocket connection error:', err);
+          };
+        };
+
+        onMounted(() => {
+          fetchNpcs();
+          fetchEngineLoad();
+          initWebSocket();
+          
+          // Periodically poll C++ Engine load telemetry status every 3 seconds (US 1.2)
+          setInterval(fetchEngineLoad, 3000);
+        });
+
+        return {
+          npcs,
+          selectedNpcId,
+          messages,
+          inputMessage,
+          pendingTask,
+          currentTaskId,
+          engineOnline,
+          wsConnected,
+          showAddNpcDialog,
+          showImportDialog,
+          importJsonText,
+          newNpc,
+          currentNpc,
+          currentNpcTags,
+          chatContainer,
+          telemetry,
+          activeNpcState,
+          npcVersions,
+          selectedVersion,
+          formatDate,
+          sendMessage,
+          clearChat,
+          saveNpc,
+          onNpcChange,
+          fillQuickMsg,
+          exportLogs,
+          cancelCurrentTask,
+          importBackground,
+          rollbackVersion
+        };
+      }
+    })
+    .use(ElementPlus)
+    .mount('#app');
+  </script>
+</body>
+</html>

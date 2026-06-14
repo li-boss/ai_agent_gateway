@@ -46,3 +46,13 @@ CTestTestfile.cmake
 
 # VS Code directory
 .vscode/
+
+# Node.js
+control_plane/node_modules/
+control_plane/package-lock.json
+
+# SQLite 数据库（二进制，不应进版本控制）
+control_plane/gateway.db
+
+# 运行时日志
+gateway.log

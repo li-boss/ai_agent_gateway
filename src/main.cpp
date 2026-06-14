@@ -1,3 +1,104 @@
+// ============================================================================
+// [NEW ADDITION AREA - START]
+// 新增部分：本段新加代码包含网关的 HTTP 接口扩展、信号量处理逻辑，以及生产级网关启动入口。
+// 修改日期：2026-06-14
+// 职责：
+//   1. 引入 core/HttpServer.h 与 core/WebhookClient.h。
+//   2. 增加信号捕捉（SIGINT, SIGTERM）实现优雅关闭。
+//   3. 读取环境变量 DEEPSEEK_API_KEY、CONTROL_HOST、CONTROL_PORT 初始化服务并启动。
+// 范围：第一行至下面的 [NEW ADDITION AREA - END]
+// ============================================================================
+
+#include <iostream>
+#include <string>
+#include <chrono>
+#include <vector>
+#include <cstdlib>
+#include <csignal>
+#include <mutex>
+#include <condition_variable>
+
+#include "core/ThreadPool.h"
+#include "core/MemoryStorage.h"
+#include "core/StorageInterface.h"
+#include "core/LLMClient.h"
+#include "core/Logger.h"
+#include "core/HttpServer.h"
+#include "core/WebhookClient.h"
+
+namespace {
+    std::mutex signal_mtx;
+    std::condition_variable signal_cv;
+    bool should_stop = false;
+}
+
+// 信号处理函数，用于优雅停机
+void signal_handler(int signal) {
+    if (signal == SIGINT || signal == SIGTERM) {
+        {
+            std::lock_guard<std::mutex> lock(signal_mtx);
+            should_stop = true;
+        }
+        signal_cv.notify_one();
+    }
+}
+
+int main() {
+    LOG_INFO << "========== AI Agent 异步网关启动 ==========";
+    
+    // 1. 读取环境变量 DEEPSEEK_API_KEY（不存在则报错退出）
+    const char* env_p = std::getenv("DEEPSEEK_API_KEY");
+    if (env_p == nullptr) {
+        LOG_ERROR << "[Fatal Error] 缺失环境变量 DEEPSEEK_API_KEY。";
+        LOG_ERROR << "请在运行前执行: export DEEPSEEK_API_KEY=\"你的真实Key\"";
+        return 1; // 异常退出状态码
+    }
+    std::string api_key = env_p;
+
+    // 2. 读取环境变量 CONTROL_HOST 和 CONTROL_PORT
+    const char* host_p = std::getenv("CONTROL_HOST");
+    std::string control_host = (host_p != nullptr) ? host_p : "localhost";
+
+    const char* port_p = std::getenv("CONTROL_PORT");
+    int control_port = (port_p != nullptr) ? std::atoi(port_p) : 3000;
+
+    // 3. 创建核心服务组件
+    ThreadPool pool(4);
+    MemoryStorage storage(100);
+    LLMClient llm(api_key);
+    WebhookClient webhook(control_host, control_port);
+    HttpServer httpServer(pool, storage, llm, webhook);
+
+    // 4. 注册信号处理程序
+    std::signal(SIGINT, signal_handler);
+    std::signal(SIGTERM, signal_handler);
+
+    // 5. 启动 HTTP 服务，监听端口 8080
+    httpServer.start(8080);
+    LOG_INFO << "引擎节点启动成功，监听端口 8080";
+
+    // 6. 阻塞等待信号触发优雅停机
+    {
+        std::unique_lock<std::mutex> lock(signal_mtx);
+        signal_cv.wait(lock, [] { return should_stop; });
+    }
+
+    LOG_INFO << "收到关闭信号，正在关闭引擎节点，请稍候...";
+    httpServer.stop();
+    LOG_INFO << "引擎节点优雅停机完成。";
+
+    return 0; 
+}
+
+// ============================================================================
+// [NEW ADDITION AREA - END]
+// ============================================================================
+
+
+// ============================================================================
+// 以下为原文件内容，已注释保留以防直接删除：
+// ============================================================================
+/*
 #include <iostream>
 #include <string>
 #include <chrono>
@@ -6,9 +107,9 @@
 #include "core/ThreadPool.h"
 #include "core/MemoryStorage.h"
 #include "core/StorageInterface.h"
-#include"core/LLMClient.h"
+#include "core/LLMClient.h"
 #include <cstdlib>
-#include"core/Logger.h"
+#include "core/Logger.h"
 // 这是一个模拟的耗时操作：假设我们在请求外部的大模型 API
 std::string real_llm_api_call(int user_id, const std::string& prompt,StorageInterface& db_interface,LLMClient &llm_client) {
    
@@ -114,3 +215,4 @@ int main() {
 
     return 0; // 退出 main 函数时，pool 的析构函数会被自动调用，优雅关机
 }
+*/

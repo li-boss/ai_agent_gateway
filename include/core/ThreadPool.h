@@ -1,3 +1,133 @@
+// ============================================================================
+// [NEW ADDITION AREA - START]
+// 新增部分：添加了 <atomic>，并在 ThreadPool 类中引入了 active_workers 原子计数，
+//           提供了 get_queue_size()、get_active_workers()、get_total_workers() 方法，
+//           并在 Worker 线程执行任务前后分别递增与递减该计数器以统计负载。
+// 修改日期：2026-06-14
+// 范围：第一行至下面的 [NEW ADDITION AREA - END]
+// ============================================================================
+
+#ifndef THREAD_POOL_H
+#define THREAD_POOL_H
+
+#include <vector>
+#include <queue>
+#include <thread>
+#include <functional>
+#include <mutex>
+#include <condition_variable>
+#include <future>
+#include <stdexcept>
+#include <atomic>
+
+class ThreadPool {
+public:
+    explicit ThreadPool(size_t threads);
+    ~ThreadPool();
+
+    template<class F, class... Args>
+    auto enqueue(F&& f, Args&&... args)
+         -> std::future<typename std::result_of<F(Args...)>::type>;
+
+    // 负载查询接口
+    size_t get_queue_size() {
+        std::lock_guard<std::mutex> lock(queue_mutex);
+        return tasks.size();
+    }
+
+    size_t get_active_workers() const {
+        return active_workers.load();
+    }
+
+    size_t get_total_workers() const {
+        return workers.size();
+    }
+
+private:
+    std::vector<std::thread> workers;
+    std::queue<std::function<void()>> tasks;
+    std::mutex queue_mutex;
+    std::condition_variable condition;
+    bool stop;
+
+    // 活跃工作线程计数
+    std::atomic<size_t> active_workers{0};
+};
+
+inline ThreadPool::ThreadPool(size_t threads) : stop(false) {
+    for (size_t i = 0; i < threads; ++i) {
+        workers.emplace_back([this] {
+            while (true) {
+                std::function<void()> task;
+                {
+                    std::unique_lock<std::mutex> lock(this->queue_mutex);
+                    this->condition.wait(lock, [this] {
+                        return this->stop || !this->tasks.empty();
+                    });
+
+                    if (this->stop && this->tasks.empty()) {
+                        return;
+                    }
+                    task = std::move(this->tasks.front());
+                    this->tasks.pop();
+                }
+                
+                // 执行前递增活跃数
+                active_workers++;
+                task();
+                // 执行后递减活跃数
+                active_workers--;
+            }
+        });
+    }
+}
+
+inline ThreadPool::~ThreadPool() {
+    {
+        std::unique_lock<std::mutex> lock(queue_mutex);
+        stop = true;
+    }
+    condition.notify_all();
+
+    for (std::thread &worker : workers) {
+        if (worker.joinable()) {
+            worker.join();
+        }
+    }
+}
+
+template<class F, class... Args>
+auto ThreadPool::enqueue(F&& f, Args&&... args)
+     -> std::future<typename std::result_of<F(Args...)>::type> {
+    using return_type = typename std::result_of<F(Args...)>::type;
+    
+    auto task = std::make_shared<std::packaged_task<return_type()>>(
+        std::bind(std::forward<F>(f), std::forward<Args>(args)...)
+    );
+    
+    std::future<return_type> res = task->get_future();
+    {
+        std::unique_lock<std::mutex> lock(queue_mutex);
+        if (stop) {
+            throw std::runtime_error("网关已关闭，禁止向线程池提交新任务!");
+        }
+        tasks.emplace([task]() { (*task)(); });
+    }
+    condition.notify_one();
+    return res;
+}
+
+#endif // THREAD_POOL_H
+
+// ============================================================================
+// [NEW ADDITION AREA - END]
+// ============================================================================
+
+
+// ============================================================================
+// 以下为原文件内容，已注释保留以防直接删除：
+// ============================================================================
+/*
 #ifndef THREAD_POOL_H
 #define THREAD_POOL_H
 
@@ -116,7 +246,7 @@ template<class F,class... Args>
                     throw std::runtime_error("网关已关闭，禁止向线程池提交新任务!");
                 }
                 
-                //把装满参数和函数的 task 强行转成无参无返回值的 void()，塞入队列
+                //把装满参数 and 函数的 task 强行转成无参无返回值的 void()，塞入队列
                 tasks.emplace([task](){(*task)();});
 
             }
@@ -124,8 +254,5 @@ template<class F,class... Args>
             return res;
             }
 
-         
-
-
-
 #endif // THREAD_POOL_H
+*/
